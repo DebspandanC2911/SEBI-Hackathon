@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f4ee;
+  --foreground: #1c1917;
+  --navy: #1e3a5f;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-navy: #1e3a5f;
+  --color-navy-light: #2d5482;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+::selection {
+  background: #bfdbfe;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Rendered draft-section content (markdown subset from the AI) */
+.prose-draft p { margin: 0.55rem 0; }
+.prose-draft .md-h { font-weight: 600; color: #1e3a5f; margin: 0.9rem 0 0.25rem; font-size: 0.85rem; }
+.prose-draft ul.md-ul { list-style: disc; padding-left: 1.25rem; margin: 0.5rem 0; }
+.prose-draft ul.md-ul li { margin: 0.15rem 0; }
+.prose-draft table.md-table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 12.5px; }
+.prose-draft table.md-table th { background: #f1f5f9; font-weight: 600; text-align: left; }
+.prose-draft table.md-table th, .prose-draft table.md-table td { border: 1px solid #e2e8f0; padding: 5px 9px; }
+.prose-draft table.md-table tr:nth-child(even) td { background: #f8fafc; }
+.prose-draft table.md-table th.num, .prose-draft table.md-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* SIIM hero intro: letters land one by one, each word lights up in its colour */
+@keyframes siim-letter {
+  0% { opacity: 0; transform: translateY(26px) scale(0.7); filter: blur(6px); }
+  60% { filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes siim-word {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes siim-rest {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.siim-letter { opacity: 0; display: inline-block; animation: siim-letter 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+.siim-word { opacity: 0; display: inline-flex; align-items: center; gap: 6px; animation: siim-word 0.45s ease-out forwards; }
+.siim-rest { opacity: 0; animation: siim-rest 0.8s ease-out forwards; animation-delay: 0.3s; }
