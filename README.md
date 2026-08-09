@@ -17,7 +17,7 @@ An evidence backed platform that helps an SME promoter prepare a substantially c
 **SEBI Securities Market TechSprint at GFF 2026 · Problem Statement 4**
 Simplifying IPO Offer Document Preparation for SMEs
 
-[Live prototype](https://sebi-hackathon-code-wizards.vercel.app)
+[Live prototype](https://siim-code-wizards.onrender.com/)
 
 </div>
 
