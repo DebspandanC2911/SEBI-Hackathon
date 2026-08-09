@@ -16,7 +16,7 @@ An evidence backed platform that helps an SME promoter prepare a substantially c
 
 ---
 
-> **Positioning.** SIIM is a preparation and enablement aid, not a regulatory filing. Its ceiling is *ready for merchant banker review*, never *ready to file*. It does not replace SEBI registered merchant bankers, legal counsel or auditors, and it never presents its output as SEBI approved or guaranteed compliant.
+
 
 ## The problem
 
