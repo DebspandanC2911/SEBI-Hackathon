@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   Mail, Lock, Eye, EyeOff, PlayCircle, ChevronRight,
-  UserCog, Briefcase, ArrowRight,
+  UserCog, Briefcase, ArrowRight, Rocket, Loader2,
 } from "lucide-react";
 import { usePreloader } from "./PreloaderProvider";
 import { useLanguage, type Lang } from "./LanguageProvider";
@@ -130,6 +130,7 @@ export default function AuthCard() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [learnOpen, setLearnOpen] = useState(false);
+  const [demoBusy, setDemoBusy] = useState(false);
   const preloader = usePreloader();
 
   const t = T[lang];
@@ -182,6 +183,22 @@ export default function AuthCard() {
     } catch {
       setError(t.errNetwork);
       setBusy(false);
+    }
+  }
+
+  // One-click demo: signs in as the pre-seeded sample company with a fully
+  // furnished workspace (every tab populated), then routes into the portal.
+  async function runDemo() {
+    setDemoBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/demo-login", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error ?? t.errGeneric); setDemoBusy(false); return; }
+      enter("PROMOTER", "GreenLeaf Agro Foods Limited");
+    } catch {
+      setError(t.errNetwork);
+      setDemoBusy(false);
     }
   }
 
@@ -391,6 +408,22 @@ export default function AuthCard() {
         </div>
         <ChevronRight size={18} className="text-slate-400" />
       </button>
+
+      {/* one-click live demo, fully populated sample company */}
+      <button
+        type="button"
+        onClick={runDemo}
+        disabled={demoBusy}
+        className="mt-3 w-full flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-sky-500 px-4 py-3.5 text-left text-white shadow-sm shadow-blue-600/25 hover:shadow-md transition-shadow disabled:opacity-70 disabled:cursor-wait cursor-pointer"
+      >
+        {demoBusy ? <Loader2 size={28} className="shrink-0 animate-spin" /> : <Rocket size={28} className="shrink-0" />}
+        <div className="flex-1">
+          <div className="text-sm font-semibold">{demoBusy ? "Preparing the demo…" : "Explore the live demo"}</div>
+          <div className="text-[11px] text-white/85">Open a fully prepared sample company, no signup needed</div>
+        </div>
+        <ChevronRight size={18} className="text-white/80" />
+      </button>
+
       <LearnAboutSiimModal key={lang} open={learnOpen} onClose={() => setLearnOpen(false)} lang={lang} />
     </div>
   );
