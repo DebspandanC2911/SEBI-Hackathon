@@ -17,7 +17,7 @@ An evidence backed platform that helps an SME promoter prepare a substantially c
 **SEBI Securities Market TechSprint at GFF 2026 · Problem Statement 4**
 Simplifying IPO Offer Document Preparation for SMEs
 
-[Live prototype](https://siim-code-wizards.onrender.com/)
+[Live prototype](https://sebi-hackathon-code-wizards.vercel.app)
 
 </div>
 
@@ -33,21 +33,19 @@ SIIM turns that scattered, opaque process into a guided, evidence backed workflo
 
 ## Screenshots
 
-> Add your captures to `docs/screenshots/` using the file names below and they will render here.
-
 <div align="center">
 
-| Landing | IPO readiness cockpit |
+| Login and landing | IPO readiness cockpit |
 |---|---|
-| <img src="docs/screenshots/landing.png" alt="Landing page" width="420" /> | <img src="docs/screenshots/intelligence.png" alt="IPO Intelligence dashboard" width="420" /> |
+| <img src="docs/screenshots/SIIM_01_Login.png" alt="Login and landing" width="420" /> | <img src="docs/screenshots/SIIM_02_IPO_Readiness.png" alt="IPO readiness cockpit" width="420" /> |
 
-| Evidence and extraction | Disclosure integrity and forensics |
+| Evidence and extraction | IPO intelligence |
 |---|---|
-| <img src="docs/screenshots/evidence.png" alt="Evidence and extraction" width="420" /> | <img src="docs/screenshots/integrity.png" alt="Disclosure integrity score" width="420" /> |
+| <img src="docs/screenshots/SIIM_03_Evidence_Extraction.png" alt="Evidence and extraction" width="420" /> | <img src="docs/screenshots/SIIM_04_IPO_Intelligence.png" alt="IPO intelligence" width="420" /> |
 
-| Draft offer document | Merchant banker review |
+| Draft offer document | SIIM assistant |
 |---|---|
-| <img src="docs/screenshots/draft.png" alt="Draft offer document" width="420" /> | <img src="docs/screenshots/banker.png" alt="Merchant banker review" width="420" /> |
+| <img src="docs/screenshots/SIIM_05_Draft_Prospectus.png" alt="Draft offer document" width="420" /> | <img src="docs/screenshots/SIIM_06_Assistant.png" alt="SIIM assistant" width="420" /> |
 
 </div>
 
