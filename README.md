@@ -8,14 +8,7 @@
 
 An evidence backed platform that helps an SME promoter prepare a substantially complete draft offer document, while preserving the authorised intermediary's role in review and certification.
 
-[![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19-149ECA?logo=react)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-7-47A248?logo=mongodb)](https://www.mongodb.com/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
 
-**SEBI Securities Market TechSprint at GFF 2026 · Problem Statement 4**
-Simplifying IPO Offer Document Preparation for SMEs
 
 [Live prototype](https://siim-code-wizards.onrender.com/)
 
