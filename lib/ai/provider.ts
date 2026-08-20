@@ -185,6 +185,56 @@ function parseJson<T>(raw: string | null): T | null {
   }
 }
 
+// ── Embeddings (for semantic retrieval / RAG) ────────────────────────────────
+
+/**
+ * Embed one or more texts into vectors for semantic search. Uses Gemini's
+ * text-embedding model with the same key rotation as callAI. Returns null when
+ * no Gemini key is configured or the call fails, so the caller can fall back to
+ * lexical retrieval — the RAG layer must never hard-depend on the network.
+ * (Only the Gemini provider exposes embeddings here; Anthropic has none and
+ * OpenAI's is a separate endpoint we do not need for this build.)
+ */
+export async function embedTexts(texts: string[]): Promise<number[][] | null> {
+  const keys = geminiKeys();
+  if (!keys.length || !texts.length) return null;
+  if (aiCoolingDown()) return null;
+  const model = process.env.GEMINI_EMBED_MODEL ?? "text-embedding-004";
+
+  for (let attempt = 0; attempt < Math.max(2, keys.length); attempt++) {
+    const key = keys[geminiKeyCursor % keys.length];
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents`,
+        {
+          method: "POST",
+          headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            requests: texts.map((t) => ({
+              model: `models/${model}`,
+              content: { parts: [{ text: t.slice(0, 8000) }] },
+            })),
+          }),
+        }
+      );
+      if (res.status === 429 || res.status === 503) { geminiKeyCursor++; continue; }
+      if (!res.ok) {
+        console.error(`[ai] embed error ${res.status}: ${(await res.text()).slice(0, 200)}`);
+        return null;
+      }
+      const data = await res.json();
+      const out = (data?.embeddings ?? []).map((e: { values?: number[] }) => e.values ?? []);
+      return out.length === texts.length ? out : null;
+    } catch (e) {
+      console.error(`[ai] embed request failed: ${e instanceof Error ? e.message : e}`);
+      return null;
+    }
+  }
+  return null;
+}
+
+export const embeddingsAvailable = () => geminiKeys().length > 0;
+
 // ── Classification ──────────────────────────────────────────────────────────
 
 export const DOCUMENT_CATEGORIES = [
@@ -295,7 +345,8 @@ export async function answerPromoterQuestion(
   company: Company,
   analysis: AnalysisResult | null,
   draft: DraftSection[],
-  facts: ExtractedFact[]
+  facts: ExtractedFact[],
+  regProvisions: { title: string; text: string; citation: string }[] = []
 ): Promise<string> {
   const gaps = analysis?.gaps.filter((g) => g.status !== "Resolved") ?? [];
   // No per-answer disclaimer suffix: the chat UI already states permanently that
@@ -319,6 +370,9 @@ export async function answerPromoterQuestion(
     .map((f) => `${f.factLabel}: ${f.normalizedValue}${f.financialYear ? ` (${f.financialYear})` : ""} [${f.sourceFileName}${f.pageStart ? ` p.${f.pageStart}` : ""}]`).join("\n");
   const gapsCtx = gaps.slice(0, 20).map((g) => `[${g.severity}] ${g.title}: ${g.explanation}`).join("\n");
   const draftCtx = draft.slice(0, 30).map((d) => `${d.sectionName}: ${d.status}, confidence ${d.confidence}%`).join("\n");
+  const regCtx = regProvisions.length
+    ? regProvisions.map((r, i) => `[${i + 1}] ${r.title}: ${r.text} (${r.citation})`).join("\n")
+    : "";
 
   const answer = await callAI(
     `You are SIIM Assistant, a knowledgeable and friendly guide for an Indian SME promoter preparing an IPO on the SME platform (NSE Emerge / BSE SME). You help with the SME IPO journey, SEBI ICDR requirements, the documents and disclosures needed, how to read this company's readiness, gaps and risks, and how to use the SIIM app.
@@ -332,7 +386,11 @@ Key rule: "Hindi" always means Devanagari. Never reply in Romanised Hindi when t
 
 SCOPE: Answer any question connected to this promoter, their company, the SME IPO process, SEBI / ICDR rules, offer-document disclosures, or using SIIM, drawing on BOTH the company context below AND your own general knowledge of Indian SME IPOs. Answer general IPO or SEBI questions helpfully from your knowledge even when the answer is not in the context; be willing to interpret loosely-worded or indirect questions rather than refusing. Use the company context for anything specific to THIS company, and do not invent this company's own figures, if a specific company data point is genuinely unavailable, say it is not yet in the uploaded documents and suggest uploading or entering it. Only if a question is clearly unrelated to IPOs, this company, SEBI or SIIM (for example a cooking recipe, general trivia, entertainment or coding help) should you politely decline in one short line and steer the user back to their IPO preparation. Never state definitive regulatory conclusions (approved / compliant / eligible / guaranteed) as fact.
 
+REGULATION GROUNDING: When the RETRIEVED SEBI ICDR PROVISIONS below are relevant, base your regulatory statements on them and use their exact figures rather than your memory. These are the authoritative, current provisions. Do not contradict them, and do not invent regulation numbers or thresholds that are not stated in them or that you are not sure of.
+
 FORMAT RULES (strict): Write short, polished conversational sentences in plain paragraphs, like a helpful advisor speaking, not a report. Never use markdown symbols: no asterisks, no dashes as bullets, no # headings, no tables, no "**bold**". When you need a list, write short numbered lines ("1. …", "2. …"). Keep the whole answer under about 150 words. Do NOT append disclaimers, notes, or "consult your merchant banker / legal counsel" reminders, the app already displays that permanently next to this chat. Mention professional review only if the user's question is specifically about approval, filing or sign-off. End on the substance, not a caveat.
+
+RETRIEVED SEBI ICDR PROVISIONS (authoritative, cite when used):\n${regCtx || "(none retrieved for this question)"}
 
 COMPANY: ${company.name} (${company.industry}); readiness ${analysis?.scores.overall ?? "n/a"}/100; RPT risk ${analysis?.scores.rptScore ?? "n/a"}/100.
 EXTRACTED FACTS:\n${factsCtx || "(none)"}

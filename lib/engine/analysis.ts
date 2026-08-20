@@ -15,6 +15,7 @@ import type {
 } from "../types";
 import { SCORING_WEIGHTS, STATUS_SCORE } from "../rules/scoring-config";
 import { computeIntegrityScore } from "./forensics";
+import { matchProvisions } from "../rag/match";
 
 /**
  * The analysis engine. Every readiness check, gap, heatmap cell, RPT flag and
@@ -777,7 +778,16 @@ export function runAnalysis(
   const ob = (
     rule: string, requirement: string, status: ComplianceObligation["status"],
     detail: string, basis = BASIS
-  ) => complianceObligations.push({ id: nid("ob"), rule, requirement, status, detail, basis });
+  ) => {
+    // Ground each obligation in the SEBI ICDR knowledge base (same corpus that
+    // powers the assistant's RAG), so every compliance check cites its source
+    // provision. Lexical match is deterministic and offline-safe.
+    const m = matchProvisions(`${rule} ${requirement}`, 1)[0];
+    complianceObligations.push({
+      id: nid("ob"), rule, requirement, status, detail, basis,
+      provision: m ? { title: m.chunk.title, text: m.chunk.text, citation: m.chunk.citation } : undefined,
+    });
+  };
 
   const last3 = fin.slice(-3);
   const ebitda1cr = last3.filter((f) => (f.ebitdaCr ?? 0) >= 1).length;
@@ -831,21 +841,23 @@ export function runAnalysis(
         : objects.length ? "No related-party loan detected in the objects / borrowings." : "Objects plan not defined yet.");
 
   if (company.issueSizeCr != null) {
-    ob("Monitoring agency", "Mandatory for issue size ₹20–50 Cr and above",
-      company.issueSizeCr >= 20 ? "Pending" : "N/A",
-      company.issueSizeCr >= 20
-        ? `Issue of ₹${company.issueSizeCr} Cr requires a SEBI-registered monitoring agency to certify utilisation of proceeds.`
-        : `Issue of ₹${company.issueSizeCr} Cr is below the ₹20 Cr monitoring-agency threshold.`);
+    ob("Monitoring agency", "Mandatory for issue size ₹50 Cr and above",
+      company.issueSizeCr >= 50 ? "Pending" : "N/A",
+      company.issueSizeCr >= 50
+        ? `Issue of ₹${company.issueSizeCr} Cr requires a SEBI-registered credit rating agency as monitoring agency to certify utilisation of proceeds. The March-2025 amendments lowered this threshold to ₹50 Cr.`
+        : `Issue of ₹${company.issueSizeCr} Cr is below the ₹50 Cr monitoring-agency threshold (lowered from ₹100 Cr in the March-2025 amendments).`);
   } else {
-    ob("Monitoring agency", "Mandatory for issue size ₹20–50 Cr and above", "Pending", "Issue size not specified.");
+    ob("Monitoring agency", "Mandatory for issue size ₹50 Cr and above", "Pending", "Issue size not specified.");
   }
 
   ob("Minimum application size", "₹2 lakh per application", "Pending",
-    "Set in the RHP by the merchant banker, SEBI raised the SME minimum application to ₹2 lakh.");
+    "Set in the RHP by the merchant banker, SEBI raised the SME minimum application to ₹2 lakh (two lots).");
   ob("Public comment period", "DRHP hosted 21 days + newspaper advertisement", "Pending",
     "The lead manager hosts the DRHP for 21 days for public comments and issues a newspaper advertisement before filing.");
-  ob("Allottees & allocation", "≥ 50 allottees; NII allocation aligned to Main Board", "Pending",
-    "Ensured at allotment; the non-institutional allocation methodology now mirrors the Main Board framework.");
+  ob("Minimum allottees", "≥ 200 allottees", "Pending",
+    "Ensured at allotment; the March-2025 amendments raised the minimum number of allottees in an SME IPO from 50 to 200.");
+  ob("NII allocation methodology", "Aligned to the Main Board framework", "Pending",
+    "Ensured at allotment; the non-institutional investor allocation methodology now mirrors the Main Board framework.");
 
   // ════ SCORES ═════════════════════════════════════════════════════════════
   const byCategory: Record<string, number> = {};

@@ -327,6 +327,9 @@ export interface ComplianceObligation {
   status: "Met" | "Attention" | "Pending" | "N/A";
   detail: string;       // computed explanation
   basis: string;        // regulatory basis / effective date
+  /** The source SEBI ICDR provision this check is grounded in, retrieved from
+   *  the RAG knowledge base (same corpus that grounds the assistant). */
+  provision?: { title: string; text: string; citation: string };
 }
 
 /**

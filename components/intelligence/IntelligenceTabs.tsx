@@ -420,9 +420,11 @@ export default function IntelligenceTabs({
             </div>
             <p className="text-xs text-slate-500 mb-4 max-w-3xl">
               Eligibility and structural obligations under the current SME framework, computed from your profile and
-              objects where the data allows. <span className="font-medium text-slate-600">Pending</span> items are
-              process obligations ensured at the RHP stage with your merchant banker. This is a preparation aid, not
-              legal advice, your merchant banker and legal counsel confirm final compliance.
+              objects where the data allows. Each check is grounded in the SEBI ICDR knowledge base, expand
+              <span className="font-medium text-emerald-700"> SEBI ICDR basis </span> on any row to read the source
+              provision. <span className="font-medium text-slate-600">Pending</span> items are process obligations
+              ensured at the RHP stage with your merchant banker. This is a preparation aid, not legal advice, your
+              merchant banker and legal counsel confirm final compliance.
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
               <GlassStat label="Met" value={obligations.filter((o) => o.status === "Met").length} tone="good" sub="Data confirms compliance" />
@@ -451,7 +453,20 @@ export default function IntelligenceTabs({
                         <td className="py-2.5 pr-3">
                           <span className={`inline-block px-2 py-0.5 text-[11px] font-medium rounded-full border ${obTone[o.status]}`}>{o.status}</span>
                         </td>
-                        <td className="py-2.5 text-slate-600">{o.detail}</td>
+                        <td className="py-2.5 text-slate-600">
+                          {o.detail}
+                          {o.provision && (
+                            <details className="mt-1.5">
+                              <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800">
+                                <span className="grid h-3.5 w-3.5 place-items-center rounded-sm bg-emerald-100 text-[9px]">§</span> SEBI ICDR basis
+                              </summary>
+                              <div className="mt-1 rounded-lg border border-emerald-200 bg-emerald-50/60 px-2.5 py-2">
+                                <div className="text-[11.5px] leading-snug text-emerald-900/90">{o.provision.text}</div>
+                                <div className="mt-1 text-[10px] text-emerald-700/70">{o.provision.citation}</div>
+                              </div>
+                            </details>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

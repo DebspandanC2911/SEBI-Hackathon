@@ -2,21 +2,22 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  Bot, ChevronDown, FileText, FolderOpen, Gauge, Loader2, Send, Sparkles, User,
+  Bot, ChevronDown, FileText, FolderOpen, Gauge, Loader2, Scale, Send, Sparkles, User,
 } from "lucide-react";
 import { GlassPanel, HeroBackdrop, ProgressBar, SeverityBadge } from "@/components/shared/ui";
 import ChatMarkdown from "@/components/chat/ChatMarkdown";
 
 const STARTER_PROMPTS: { label: string; q: string; primary?: boolean }[] = [
   { label: "What should I fix first?", q: "What should I fix first?", primary: true },
-  { label: "Is my RPT risky?", q: "Why is the related-party transaction flagged as risky and what should I disclose?", primary: true },
+  { label: "OFS & GCP limits?", q: "What are the SEBI limits on offer for sale and general corporate purposes for an SME IPO?", primary: true },
   { label: "Explain in Hindi", q: "Mere sabse bade risk factor ko simple Hindi mein samjhao", primary: true },
+  { label: "Is my RPT risky?", q: "Why is the related-party transaction flagged as risky and what should I disclose?" },
   { label: "What's missing?", q: "Which documents or facts are still missing before my draft is review-ready?" },
-  { label: "Explain my score", q: "Explain my IPO readiness score and how to improve it" },
   { label: "MB will ask…", q: "What will the merchant banker likely ask about my draft?" },
 ];
 
-interface Msg { role: "user" | "assistant"; text: string; at: string }
+interface Source { title: string; citation: string }
+interface Msg { role: "user" | "assistant"; text: string; at: string; sources?: Source[] }
 
 function Collapsible({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(true);
@@ -67,7 +68,7 @@ export default function AssistantChat({
         body: JSON.stringify({ question }),
       });
       const data = await res.json();
-      setChat((c) => [...c, { role: "assistant", text: data.answer ?? "No response, please try again.", at: now() }]);
+      setChat((c) => [...c, { role: "assistant", text: data.answer ?? "No response, please try again.", at: now(), sources: Array.isArray(data.sources) ? data.sources : [] }]);
     } catch {
       setChat((c) => [...c, { role: "assistant", text: "I could not respond (network or rate limit). Please try again in a moment.", at: now() }]);
     } finally {
@@ -127,6 +128,20 @@ export default function AssistantChat({
                   <div className={`inline-block text-left text-[13px] px-4 py-3 rounded-2xl leading-relaxed ${m.role === "user" ? "bg-gradient-to-br from-blue-600 to-sky-500 text-white rounded-tr-sm whitespace-pre-wrap shadow-md shadow-blue-500/20" : "bg-white/80 border border-white/70 text-slate-700 rounded-tl-sm shadow-sm"}`}>
                     {m.role === "user" ? m.text : <ChatMarkdown text={m.text} />}
                   </div>
+                  {m.role === "assistant" && m.sources && m.sources.length > 0 && (
+                    <div className="mt-1.5 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-left">
+                      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                        <Scale size={11} /> Grounded in SEBI ICDR
+                      </div>
+                      <ul className="mt-1 space-y-0.5">
+                        {m.sources.map((s, si) => (
+                          <li key={si} className="text-[11px] text-emerald-900/90 leading-snug">
+                            <span className="font-medium">{s.title}</span> <span className="text-emerald-700/70">· {s.citation}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <div className="text-[10px] text-slate-400 mt-1 px-1">{m.at}</div>
                 </div>
               </div>
