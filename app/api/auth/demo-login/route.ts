@@ -3,7 +3,7 @@ import {
   loadDb, saveDb, companyDocuments, companyObjects, companyFacts, companyDraft,
 } from "@/lib/store";
 import { setSessionCookie } from "@/lib/auth/session";
-import { findUserByEmail, toSessionUser } from "@/lib/auth/users";
+import { findUserByEmail } from "@/lib/auth/users";
 import { runAnalysis } from "@/lib/engine/analysis";
 import { generateBlueprintSection } from "@/lib/engine/draft";
 import { SME_PROSPECTUS_BLUEPRINT } from "@/lib/ipo-blueprint/sme-prospectus-blueprint";
@@ -23,13 +23,20 @@ const DEMO_EMAIL = "promoter@greenleaf.com";
 export async function POST() {
   const db = await loadDb();
 
+  // Prefer GreenLeaf, then any seeded company that actually has documents, so
+  // the demo always lands on a populated workspace regardless of naming.
   const company =
-    db.companies.find((c) => c.ownerEmail?.toLowerCase() === DEMO_EMAIL) ??
-    db.companies.find((c) => /greenleaf/i.test(c.name));
+    db.companies.find((c) => /greenleaf/i.test(c.name)) ??
+    db.companies.find((c) => companyDocuments(db, c.id).length > 0) ??
+    db.companies[0];
   if (!company) return NextResponse.json({ error: "Demo company is not seeded on this environment yet." }, { status: 404 });
 
-  // Bind the sample company to the demo account and make it the active company.
-  if (!company.ownerEmail) company.ownerEmail = DEMO_EMAIL;
+  // Sign in as the company's ACTUAL owner so page scoping always matches; if the
+  // company has no owner yet, claim it for the demo account. This is what was
+  // wrong before: we logged in as a fixed email that did not own the company,
+  // so every tab scoped to that email came back empty.
+  const owner = company.ownerEmail?.trim().toLowerCase() || DEMO_EMAIL;
+  company.ownerEmail = owner;
   db.activeCompanyId = company.id;
 
   const docs = companyDocuments(db, company.id);
@@ -57,11 +64,15 @@ export async function POST() {
 
   await saveDb(db);
 
-  // 3) Set the session as the demo promoter account.
-  const user = await findUserByEmail(DEMO_EMAIL);
-  const session = user
-    ? toSessionUser(user)
-    : { id: company.id, name: company.promoterName || "Demo Promoter", email: DEMO_EMAIL, role: "PROMOTER" as const };
+  // 3) Sign in as the company's owner, always with the PROMOTER role so the demo
+  //    lands in the promoter workspace and its company is in scope.
+  const user = await findUserByEmail(owner);
+  const session = {
+    id: user?.id ?? company.id,
+    name: user?.name ?? company.promoterName ?? "Demo Promoter",
+    email: owner,
+    role: "PROMOTER" as const,
+  };
   await setSessionCookie(session);
 
   return NextResponse.json({ ok: true });
