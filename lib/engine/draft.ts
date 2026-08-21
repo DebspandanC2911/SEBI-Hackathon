@@ -160,14 +160,19 @@ export async function generateDraft(
   facts: ExtractedFact[],
   objects: ObjectOfIssue[],
   analysis: AnalysisResult | null,
-  sectionIds?: string[]
+  sectionIds?: string[],
+  opts?: { fast?: boolean }
 ): Promise<DraftSection[]> {
   const sections = sectionIds?.length
     ? SME_PROSPECTUS_BLUEPRINT.filter((s) => sectionIds.includes(s.sectionId))
     : SME_PROSPECTUS_BLUEPRINT;
+  // Fast mode composes every section deterministically: no AI calls, no pacing,
+  // so the whole draft is ready in a moment. Used for background pre-generation
+  // right after setup, so the Draft tab is already populated when opened.
+  const fast = opts?.fast === true;
   const out: DraftSection[] = [];
   for (const s of sections) {
-    const preferAi = PRIORITY_SECTION_IDS.includes(s.sectionId);
+    const preferAi = !fast && PRIORITY_SECTION_IDS.includes(s.sectionId);
     out.push(await generateBlueprintSection(s, company, docs, facts, objects, analysis, { preferAi }));
     if (preferAi && aiAvailable()) await paceAI(); // pace only real AI calls
   }

@@ -307,6 +307,16 @@ export default function OnboardingForm({ existing }: { existing: Company | null 
       } else {
         await fetch("/api/analysis", { method: "POST" });
       }
+
+      // Pre-generate the draft in the background (deterministic, so it is ready
+      // in a moment) while the promoter reviews Evidence and IPO Intelligence.
+      // Fire-and-forget: by the time they open the Draft tab it is already there,
+      // no waiting. Idempotent server-side, so it never overwrites a real draft.
+      void fetch("/api/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prefer: "fast" }),
+      }).catch(() => {});
       // Clear one-shot state: retained files must NOT be re-uploaded on the
       // next save (that's how duplicate documents & phantom conflicts happen).
       setPendingFiles([]);

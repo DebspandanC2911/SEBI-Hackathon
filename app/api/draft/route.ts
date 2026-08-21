@@ -29,13 +29,28 @@ export async function POST(req: NextRequest) {
   if (!company) return NextResponse.json({ error: "Create a company profile first." }, { status: 400 });
 
   const body = await req.json().catch(() => ({}));
+  const fast = body?.prefer === "fast";
+
+  // Background pre-generation ("prefer: fast") is idempotent: if a draft already
+  // exists for this company, do nothing, so a second trigger never overwrites a
+  // richer draft or wastes work.
+  if (fast) {
+    const already = companyDraft(db, company.id).filter(
+      (s) => s.status !== "Not Started" && s.generatedText.trim()
+    ).length;
+    if (already >= 5) {
+      return NextResponse.json({ draft: companyDraft(db, company.id), skipped: true });
+    }
+  }
+
   const sections = await generateDraft(
     company,
     companyDocuments(db, company.id),
     companyFacts(db, company.id),
     companyObjects(db, company.id),
     db.analysis[company.id] ?? null,
-    body?.sectionIds
+    body?.sectionIds,
+    { fast }
   );
 
   // replace regenerated sections, keep comments
