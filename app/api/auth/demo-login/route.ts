@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  loadDb, saveDb, companyDocuments, companyObjects, companyFacts, companyDraft,
+  loadDb, saveDb, companyDocuments, companyObjects, companyFacts,
 } from "@/lib/store";
 import { setSessionCookie } from "@/lib/auth/session";
 import { findUserByEmail } from "@/lib/auth/users";
@@ -43,24 +43,22 @@ export async function POST() {
   const facts = companyFacts(db, company.id);
   const objects = companyObjects(db, company.id);
 
-  // 1) Rule-engine analysis (readiness, gaps, RPT, integrity, observations).
-  if (!db.analysis[company.id]) db.analysis[company.id] = runAnalysis(company, docs, objects);
+  // 1) Rule-engine analysis — always recomputed so the demo reflects the
+  //    current rules (e.g. the corrected framework figures), not a stale cache.
+  db.analysis[company.id] = runAnalysis(company, docs, objects);
   const analysis = db.analysis[company.id];
 
   // 2) Full blueprint draft, deterministic so it is instant and offline-safe.
-  const alreadyDrafted = companyDraft(db, company.id).filter(
-    (s) => s.status !== "Not Started" && s.generatedText.trim()
-  ).length;
-  if (alreadyDrafted < 5) {
-    const sections = [];
-    for (const s of SME_PROSPECTUS_BLUEPRINT) {
-      sections.push(await generateBlueprintSection(s, company, docs, facts, objects, analysis, { preferAi: false }));
-    }
-    const names = new Set(sections.map((s) => s.sectionName));
-    db.draftSections = db.draftSections
-      .filter((s) => s.companyId !== company.id || !names.has(s.sectionName))
-      .concat(sections);
+  //    Always (re)generate so the demo reflects the current templates (e.g. the
+  //    professional cover page), never a draft cached from an earlier build.
+  const sections = [];
+  for (const s of SME_PROSPECTUS_BLUEPRINT) {
+    sections.push(await generateBlueprintSection(s, company, docs, facts, objects, analysis, { preferAi: false }));
   }
+  const names = new Set(sections.map((s) => s.sectionName));
+  db.draftSections = db.draftSections
+    .filter((s) => s.companyId !== company.id || !names.has(s.sectionName))
+    .concat(sections);
 
   await saveDb(db);
 

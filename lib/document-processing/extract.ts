@@ -75,6 +75,13 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 const AMOUNT = String.raw`(₹|rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)\s*(crores?|cr\.?|lakhs?|lacs?|million|mn)?`;
 
+/** Match extraction labels as phrases, so short labels such as PAT do not
+ * accidentally match names such as Patel. */
+function hasKeyword(haystack: string, keyword: string): boolean {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  return new RegExp(`(?:^|\\b)${escaped}(?:\\b|$)`, "i").test(haystack);
+}
+
 /** Reject bare numbers that are almost certainly years/dates, not amounts. */
 function looksLikeYear(numStr: string, currency: string | undefined, unit: string | undefined): boolean {
   if (currency || unit) return false;
@@ -91,7 +98,7 @@ function looksLikeYear(numStr: string, currency: string | undefined, unit: strin
 function amountNear(text: string, keywords: string[]): number | null {
   for (const line of text.split(/\r?\n/)) {
     const l = line.toLowerCase();
-    if (!keywords.some((k) => l.includes(k))) continue;
+    if (!keywords.some((k) => hasKeyword(l, k))) continue;
     const re = new RegExp(AMOUNT, "gi");
     let m: RegExpExecArray | null;
     let bare: number | null = null;
@@ -112,7 +119,7 @@ function amountNear(text: string, keywords: string[]): number | null {
     if (!m[2] || looksLikeYear(m[2], m[1], m[3])) continue;
     const start = Math.max(0, m.index - 80);
     const ctx = text.slice(start, m.index).toLowerCase();
-    if (keywords.some((k) => ctx.includes(k))) {
+    if (keywords.some((k) => hasKeyword(ctx, k))) {
       const v = toCrore(m[2], m[3]);
       if (v !== null && v > 0) return v;
     }
@@ -140,20 +147,26 @@ export function extractFields(fileName: string, text: string, category: string):
     ? "FY" + fy[1]
     : "FY20" + (fy as RegExpMatchArray)[2];
 
-  const revenue = amountNear(t, ["revenue from operations", "revenue", "turnover", "total income", "sales"]);
-  if (revenue) f.revenueCr = revenue;
-  const pat = amountNear(t, ["profit after tax", "pat", "net profit", "profit for the year"]);
-  if (pat) f.patCr = pat;
-  const ebitda = amountNear(t, ["ebitda"]);
-  if (ebitda) f.ebitdaCr = ebitda;
-  const nw = amountNear(t, ["net worth", "networth", "total equity", "shareholders' funds", "shareholders funds"]);
-  if (nw) f.netWorthCr = nw;
-  const debt = amountNear(t, ["borrowings", "total debt", "loan outstanding", "term loan"]);
-  if (debt) f.borrowingsCr = debt;
-  const recv = amountNear(t, ["trade receivables", "receivables", "sundry debtors", "debtors"]);
-  if (recv) f.receivablesCr = recv;
-  const cfo = amountNear(t, ["cash flow from operations", "cash generated from operations", "net cash from operating"]);
-  if (cfo) f.cfoCr = cfo;
+  // Do not manufacture financial facts from DINs, quotation references or
+  // contract dates. Financial metrics are extracted only from financial-class
+  // evidence; category-specific extractors below handle tax, RPT, legal and
+  // objects-of-issue documents independently.
+  if (["Restated Financials", "Financial Statements", "Audit Report"].includes(category)) {
+    const revenue = amountNear(t, ["revenue from operations", "revenue", "turnover", "total income", "sales"]);
+    if (revenue) f.revenueCr = revenue;
+    const pat = amountNear(t, ["profit after tax", "pat", "net profit", "profit for the year"]);
+    if (pat) f.patCr = pat;
+    const ebitda = amountNear(t, ["ebitda"]);
+    if (ebitda) f.ebitdaCr = ebitda;
+    const nw = amountNear(t, ["net worth", "networth", "total equity", "shareholders' funds", "shareholders funds"]);
+    if (nw) f.netWorthCr = nw;
+    const debt = amountNear(t, ["borrowings", "total debt", "loan outstanding", "term loan"]);
+    if (debt) f.borrowingsCr = debt;
+    const recv = amountNear(t, ["trade receivables", "receivables", "sundry debtors", "debtors"]);
+    if (recv) f.receivablesCr = recv;
+    const cfo = amountNear(t, ["cash flow from operations", "cash generated from operations", "net cash from operating"]);
+    if (cfo) f.cfoCr = cfo;
+  }
 
   if (category === "Tax Returns") {
     const gstTurnover = amountNear(t, ["taxable turnover", "gst turnover", "aggregate turnover", "outward supplies"]);
@@ -164,8 +177,10 @@ export function extractFields(fileName: string, text: string, category: string):
 
   if (category === "Objects Evidence") {
     const q = amountNear(t, ["quotation", "total amount", "grand total", "proforma", "basic price"]);
-    if (q) f.quotationAmountCr = q;
-    f.quotationHasGstin = !!gstin;
+    if (q) {
+      f.quotationAmountCr = q;
+      f.quotationHasGstin = !!gstin;
+    }
     const wc = amountNear(t, ["working capital requirement", "incremental working capital", "working capital"]);
     if (wc) f.wcRequirementCr = wc;
   }
@@ -188,10 +203,15 @@ export function extractFields(fileName: string, text: string, category: string):
   if (authCap) f.authorisedCapitalCr = authCap;
 
   // Entity names: LLPs / companies mentioned in the text
-  const entityRe = /([A-Z][A-Za-z&.]+(?:\s+[A-Z][A-Za-z&.]+){0,4}\s+(?:LLP|Private Limited|Pvt\.?\s?Ltd\.?|Limited))/g;
+  const entityRe = /([A-Z][A-Za-z&.]+(?:[ \t]+[A-Z][A-Za-z&.]+){0,4}[ \t]+(?:LLP|Private Limited|Pvt\.?[ \t]?Ltd\.?|Limited))/g;
   const entities = new Set<string>();
   let em: RegExpExecArray | null;
-  while ((em = entityRe.exec(t)) !== null && entities.size < 12) entities.add(em[1].trim());
+  while ((em = entityRe.exec(t)) !== null && entities.size < 12) {
+    const entity = em[1].trim()
+      .replace(/^(?:For|To)[ \t]+/, "")
+      .replace(/^[A-Z]{2}[ \t]+(?=[A-Z])/, ""); // remove visual letterhead monograms (GL / FT)
+    entities.add(entity);
+  }
   if (entities.size) f.rptEntityNames = [...entities];
 
   return f;

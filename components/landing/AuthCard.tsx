@@ -350,7 +350,7 @@ export default function AuthCard() {
         <button
           type="submit"
           disabled={busy}
-          className="group w-full flex items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#1e3a5f]/25 hover:bg-[#24466f] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          className="group w-full cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#1e3a5f]/25 hover:bg-[#24466f] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {busy
             ? t.pleaseWait
@@ -368,7 +368,7 @@ export default function AuthCard() {
         {mode === "login" ? (
           <button
             onClick={() => { setMode("register"); setError(""); }}
-            className="text-slate-600"
+            className="cursor-pointer text-slate-600"
           >
             {t.newHere}{" "}
             <span className="font-semibold text-[#0f766e] hover:underline">
@@ -378,7 +378,7 @@ export default function AuthCard() {
         ) : (
           <button
             onClick={() => { setMode("login"); setError(""); }}
-            className="text-slate-600"
+            className="cursor-pointer text-slate-600"
           >
             {t.already}{" "}
             <span className="font-semibold text-[#0f766e] hover:underline">
@@ -386,7 +386,7 @@ export default function AuthCard() {
             </span>
           </button>
         )}
-        <button className="font-medium text-slate-500 hover:text-slate-700">
+        <button className="cursor-pointer font-medium text-slate-500 hover:text-slate-700">
           {t.forgot}
         </button>
       </div>
@@ -397,7 +397,7 @@ export default function AuthCard() {
       <button
         type="button"
         onClick={() => setLearnOpen(true)}
-        className="mt-6 w-full flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3.5 text-left hover:bg-emerald-50 transition-colors"
+        className="mt-6 w-full cursor-pointer flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3.5 text-left hover:bg-emerald-50 transition-colors"
       >
         <PlayCircle size={30} className="text-emerald-600 shrink-0" />
         <div className="flex-1">

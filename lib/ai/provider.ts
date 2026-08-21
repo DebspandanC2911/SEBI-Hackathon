@@ -340,6 +340,25 @@ Write the section text now:`,
 
 // ── Promoter assistant ──────────────────────────────────────────────────────
 
+/**
+ * Decide, deterministically, the language/script the assistant must reply in.
+ * This is far more reliable than letting a small model infer it: an explicit
+ * request wins, then Devanagari implies Hindi, then a cluster of romanised-Hindi
+ * markers implies Hinglish, else English.
+ */
+function detectReplyLanguage(q: string): string {
+  const text = (q || "").trim();
+  // The word "hindi" in any spelling of "in hindi", or any Devanagari text, is a
+  // Hindi request. ("Hindi mai", "hindi me", "reply in hindi", "हिंदी में" …)
+  if (/\bhindi\b|हिं?न्?दी|[ऀ-ॿ]/i.test(text)) return "Hindi (in Devanagari script)";
+  // Explicit English request.
+  if (/\benglish\b/i.test(text)) return "English";
+  // Romanised Hinglish: a cluster of distinctive romanised-Hindi markers.
+  const markers = (text.toLowerCase().match(/\b(kya|kyu|kyun|kyon|hai|hain|hoon|hoga|kaise|kaisa|kaisi|kaam|karo|karna|karein|krna|kr|rha|raha|rahi|rhi|batao|bataye|bata|samjhao|samjha|jawab|naswer|mujhe|mera|meri|mere|mai|apna|aap|aapka|iska|uska|iss|koi|nahi|nahin|accha|acha|chahiye|kaun|kitna|kitne|jaldi|abhi|matlab|dena|dedo)\b/g) || []).length;
+  if (markers >= 2) return "Romanised Hinglish (Hindi written in Roman/Latin letters, mirroring the user's romanised style)";
+  return "English";
+}
+
 export async function answerPromoterQuestion(
   question: string,
   company: Company,
@@ -374,15 +393,12 @@ export async function answerPromoterQuestion(
     ? regProvisions.map((r, i) => `[${i + 1}] ${r.title}: ${r.text} (${r.citation})`).join("\n")
     : "";
 
-  const answer = await callAI(
-    `You are SIIM Assistant, a knowledgeable and friendly guide for an Indian SME promoter preparing an IPO on the SME platform (NSE Emerge / BSE SME). You help with the SME IPO journey, SEBI ICDR requirements, the documents and disclosures needed, how to read this company's readiness, gaps and risks, and how to use the SIIM app.
+  const replyLang = detectReplyLanguage(question);
 
-LANGUAGE (very important): Match the user's language AND script exactly.
-- English question -> reply in English.
-- If the user asks you to answer in Hindi (e.g. "answer in Hindi", "reply in Hindi", "हिंदी में बताओ"), OR writes their question in Hindi using Devanagari script (हिंदी) -> reply in proper Hindi written in DEVANAGARI script. Do NOT romanise it. For example, write "आपके ड्राफ्ट में कुछ गंभीर कमियाँ हैं", never "aapke draft mein kuch gambhir kamiyan hain".
-- ONLY use Romanised Hinglish (Hindi in Latin/Roman letters, e.g. "iska kya kaam hai", "IPO ke liye kya documents chahiye") when the user THEMSELVES typed their message in that Romanised Hinglish style, then mirror the same Roman style back.
-- If the user names any other language, reply in that language in its native script.
-Key rule: "Hindi" always means Devanagari. Never reply in Romanised Hindi when the user asked for "Hindi" or wrote in Devanagari.
+  const answer = await callAI(
+    `RESPONSE LANGUAGE (obey silently): Write your ENTIRE reply in ${replyLang}, using only ${replyLang} for every word. Never mention, quote or explain this language rule; never write meta lines like "as per my instructions" or "I must reply in English". Do not greet or introduce yourself. Just answer the question directly in ${replyLang}.
+
+You are SIIM Assistant, a knowledgeable and friendly guide for an Indian SME promoter preparing an IPO on the SME platform (NSE Emerge / BSE SME). You help with the SME IPO journey, SEBI ICDR requirements, the documents and disclosures needed, how to read this company's readiness, gaps and risks, and how to use the SIIM app.
 
 SCOPE: Answer any question connected to this promoter, their company, the SME IPO process, SEBI / ICDR rules, offer-document disclosures, or using SIIM, drawing on BOTH the company context below AND your own general knowledge of Indian SME IPOs. Answer general IPO or SEBI questions helpfully from your knowledge even when the answer is not in the context; be willing to interpret loosely-worded or indirect questions rather than refusing. Use the company context for anything specific to THIS company, and do not invent this company's own figures, if a specific company data point is genuinely unavailable, say it is not yet in the uploaded documents and suggest uploading or entering it. Only if a question is clearly unrelated to IPOs, this company, SEBI or SIIM (for example a cooking recipe, general trivia, entertainment or coding help) should you politely decline in one short line and steer the user back to their IPO preparation. Never state definitive regulatory conclusions (approved / compliant / eligible / guaranteed) as fact.
 
@@ -396,6 +412,8 @@ COMPANY: ${company.name} (${company.industry}); readiness ${analysis?.scores.ove
 EXTRACTED FACTS:\n${factsCtx || "(none)"}
 OPEN GAPS:\n${gapsCtx || "(none)"}
 DRAFT SECTIONS:\n${draftCtx || "(none generated)"}
+
+FINAL REMINDER: Write the whole answer in ${replyLang}. Do not mention the language rule or add any meta-commentary; answer the question directly.
 
 QUESTION: ${question}`,
     { maxTokens: 700 }

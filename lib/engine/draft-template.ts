@@ -100,16 +100,42 @@ const location = (c: Company) => [c.city, c.state].filter(Boolean).join(", ");
 function coverPage(ctx: DetCtx): string {
   const c = ctx.company;
   const cin = c.cin || factStr(ctx.facts, "cin");
+  const amt = (n: number) => `₹${Number(n).toFixed(2)} crore`;
+  const hasOfs = (c.ofsCr ?? 0) > 0;
+  const exchange = c.proposedListingExchange || "the SME platform (NSE Emerge / BSE SME)";
+
+  // Formal DRHP-style offering statement, composed from the company's own data.
+  let offering = `Initial public offering of up to [•] equity shares of face value of ₹10 each of ${c.name} (the "Company" or the "Issuer") for cash at a price to be determined through the book-building process`;
+  if (c.issueSizeCr != null) offering += `, aggregating up to ${amt(c.issueSizeCr)}`;
+  offering += ".";
+  if (hasOfs && c.freshIssueCr != null)
+    offering += ` The issue comprises a fresh issue of equity shares aggregating up to ${amt(c.freshIssueCr)} and an offer for sale of up to ${amt(c.ofsCr as number)} by the selling shareholders.`;
+  else if (c.freshIssueCr != null)
+    offering += ` The issue comprises a fresh issue of equity shares aggregating up to ${amt(c.freshIssueCr)}, with no offer for sale component.`;
+
   const rows: string[][] = [];
-  if (c.issueSizeCr != null) rows.push(["Total issue size", cr(c.issueSizeCr)]);
-  if (c.freshIssueCr != null) rows.push(["Fresh issue", cr(c.freshIssueCr)]);
-  if (c.ofsCr != null) rows.push(["Offer for sale", cr(c.ofsCr)]);
-  rows.push(["Proposed listing", c.proposedListingExchange || "SME platform (NSE Emerge / BSE SME)"]);
+  if (c.issueSizeCr != null) rows.push(["Total issue size", amt(c.issueSizeCr)]);
+  if (c.freshIssueCr != null) rows.push(["Fresh issue", amt(c.freshIssueCr)]);
+  if (hasOfs) rows.push(["Offer for sale", amt(c.ofsCr as number)]);
+  rows.push(["Face value per equity share", "₹10"]);
+  rows.push(["Proposed listing", exchange]);
 
   return para(
-    `This Draft Offer Document relates to the proposed initial public offering of equity shares of **${c.name}**${cin ? ` (Corporate Identity Number ${cin})` : ""}${c.industry ? `, a company engaged in ${c.industry}` : ""}${location(c) ? `, having its registered office at ${location(c)}` : ""}.`,
-    rows.length ? mdTable(["Particulars", "Details"], rows) : "",
-    "This is an AI-assisted draft prepared for review by a SEBI-registered merchant banker and legal counsel. It is not an offer document, has not been filed with SEBI or any stock exchange, and must not be used to invite any offer to subscribe for or purchase securities. Investment in equity and equity-related securities involves a degree of risk, and investors should not invest any funds in this offer unless they can afford to take the risk of losing their investment."
+    `**${(c.name || "THE COMPANY").toUpperCase()}**`,
+    [
+      location(c) ? `Registered Office: ${location(c)}` : "",
+      cin ? `Corporate Identity Number (CIN): ${cin}` : "",
+      c.industry ? `Business: ${c.industry}` : "",
+    ].filter(Boolean).join("\n"),
+    `**INITIAL PUBLIC OFFERING**`,
+    offering,
+    `**PROPOSED STOCK EXCHANGE**`,
+    `The equity shares offered through this Draft Offer Document are proposed to be listed on ${exchange}.`,
+    `**ISSUE AT A GLANCE**`,
+    mdTable(["Particulars", "Details"], rows),
+    `**GENERAL RISK**`,
+    `Investment in equity and equity-related securities involves a degree of risk, and investors should not invest any funds in this offer unless they can afford to take the risk of losing their investment.`,
+    `This is an AI-assisted draft prepared for review by a SEBI-registered merchant banker and legal counsel. It is not an offer document, has not been filed with SEBI or any stock exchange, and must not be used to invite any offer to subscribe for or purchase securities.`
   );
 }
 

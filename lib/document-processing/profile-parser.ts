@@ -111,7 +111,7 @@ const STATE_CODES: Record<string, string> = {
 };
 
 const ENTITY_RE =
-  /([A-Z][A-Za-z0-9.&']*(?:\s+[A-Z][A-Za-z0-9.&']*){0,5}\s+(?:Private\s+Limited|Pvt\.?\s?Ltd\.?|Limited|LLP))/g;
+  /([A-Z][A-Za-z0-9.&']*(?:[ \t]+[A-Z][A-Za-z0-9.&']*){0,5}[ \t]+(?:Private[ \t]+Limited|Pvt\.?[ \t]?Ltd\.?|Limited|LLP))/g;
 
 /** Strip the corporate suffix to a comparable core, e.g. "…Private Limited" → "…". */
 const coreName = (s: string) =>
@@ -171,16 +171,19 @@ export function parseCompanyProfile(sources: ParseSource[]): ParsedProfile {
   parseCompanyName(readable, set);
 
   // ── registered office → city, state (overrides CIN-derived state) ──
-  for (const s of readable) {
-    const m = s.text.match(/Registered office:?\s*([^\n]+)/i);
-    if (!m) continue;
-    const parts = m[1].split(",").map((p) => p.replace(/\.\s*$/, "").trim()).filter(Boolean);
-    if (parts.length >= 2) {
-      const stateGuess = parts[parts.length - 1];
-      const cityGuess = parts[parts.length - 2];
-      if (/^[A-Za-z &]+$/.test(stateGuess)) { provenance.state = { sourceFile: s.fileName, confidence: 85 }; profile.state = stateGuess; }
-      if (cityGuess) set("city", cityGuess, s.fileName, 82);
+  // Prefer constitutional records and allow a wrapped address. Professional
+  // PDFs commonly place the city/state/pincode on the next visual line.
+  const locationSources = [...readable].sort((a, b) =>
+    Number(b.category === "Constitutional") - Number(a.category === "Constitutional"));
+  for (const s of locationSources) {
+    const location = parseRegisteredOffice(s.text);
+    if (!location) continue;
+    if (location.state) {
+      profile.state = location.state;
+      provenance.state = { sourceFile: s.fileName, confidence: 88 };
+      foundPerDoc.set(s.fileName, (foundPerDoc.get(s.fileName) ?? 0) + 1);
     }
+    if (location.city) set("city", location.city, s.fileName, 88);
     break;
   }
 
@@ -192,9 +195,10 @@ export function parseCompanyProfile(sources: ParseSource[]): ParsedProfile {
 
   // ── industry (MOA main object, else industry overview title) ──
   for (const s of readable) {
-    // the main-object clause often wraps across lines, so capture up to the
-    // first full stop rather than the first newline
-    const m = s.text.match(/Main object:?\s*([^.]+?)\./i) ?? s.text.match(/Main object:?\s*([^.\n]+)/i);
+    // Match the complete clause label, otherwise an optional colon after the
+    // words "main object" can wrongly capture "of the company is ...".
+    const m = s.text.match(/the\s+main\s+object\s+of\s+the\s+company\s+is\s+(?:the\s+)?([\s\S]*?)(?:,\s*together\s+with|\.)/i)
+      ?? s.text.match(/main\s+objects?\s*:\s*([\s\S]*?)\./i);
     if (m) { set("industry", trimIndustry(m[1]), s.fileName, 80); break; }
   }
   if (profile.industry === undefined) {
@@ -220,6 +224,18 @@ export function parseCompanyProfile(sources: ParseSource[]): ParsedProfile {
     const m = s.text.match(/Experience:?\s*(?:over\s*)?(\d{1,2})\s*\+?\s*years/i)
       ?? s.text.match(/(\d{1,2})\s*\+?\s*years'?\s*(?:of\s*)?experience/i);
     if (m) { set("promoterExperienceYears", Number(m[1]), s.fileName, 82); break; }
+  }
+  // KYC summaries often express experience as the final "Exp.(yrs)" table
+  // column rather than as prose. Read the promoter's own row, not another
+  // director's experience value.
+  if (profile.promoterExperienceYears === undefined && profile.promoterName) {
+    const promoter = String(profile.promoterName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const row = new RegExp(`${promoter}[^\\n]{0,180}?\\b\\d{8}\\b[^\\n]{0,80}?\\b[A-Z]{5}\\d{4}[A-Z]\\b\\s+(\\d{1,2})\\b`, "i");
+    for (const s of [...readable].sort((a, b) => Number(b.category === "KYC") - Number(a.category === "KYC"))) {
+      if (!/Exp\.?\s*\(?yrs\)?|experience/i.test(s.text)) continue;
+      const m = s.text.match(row);
+      if (m) { set("promoterExperienceYears", Number(m[1]), s.fileName, 88); break; }
+    }
   }
 
   // ── the issue: size / fresh / OFS / exchange ──
@@ -257,7 +273,11 @@ export function parseCompanyProfile(sources: ParseSource[]): ParsedProfile {
     }
   }
   for (const s of readable) {
-    if (/audit committee[^\n]*?constitut/i.test(s.text)) { set("auditCommitteeConstituted", true, s.fileName, 85); break; }
+    const flat = s.text.replace(/\s+/g, " ");
+    const committeeTable = /(?:board\s+)?committees?\s+constituted/i.test(flat) && /\baudit\s+committee\b/i.test(flat);
+    const nearbyStatement = /audit\s+committee.{0,140}(?:constitut|form|establish)/i.test(flat)
+      || /(?:constitut|form|establish)[a-z]*.{0,140}audit\s+committee/i.test(flat);
+    if (committeeTable || nearbyStatement) { set("auditCommitteeConstituted", true, s.fileName, 90); break; }
   }
 
   // ── pending litigation note ──
@@ -285,7 +305,9 @@ function parseCompanyName(
   // strong labelled patterns first
   const labelled: { re: RegExp; conf: number }[] = [
     { re: /Legal name:?\s*([A-Z][A-Za-z0-9.&' ]+?(?:Private\s+Limited|Limited|LLP))/i, conf: 92 },
-    { re: /([A-Z][A-Za-z0-9.&' ]+?(?:Private\s+Limited|Limited))\s+was incorporated/i, conf: 92 },
+    { re: /name\s+of\s+the\s+company\s+is\s+([A-Z][A-Za-z0-9.&' ]+?(?:Private\s+Limited|Limited|LLP))/i, conf: 96 },
+    { re: /certif(?:y|ies)\s+that\s+([A-Z][A-Za-z0-9.&' ]+?(?:Private\s+Limited|Limited))\s+(?:is|was)\s+incorporated/i, conf: 96 },
+    { re: /([A-Z][A-Za-z0-9.&' ]+?(?:Private\s+Limited|Limited))\s+(?:is|was)\s+incorporated/i, conf: 92 },
     { re: /Board of Directors of\s+([A-Z][A-Za-z0-9.&' ]+?(?:Private\s+Limited|Limited))\s+held/i, conf: 88 },
   ];
   for (const s of readable) {
@@ -322,7 +344,8 @@ function parseCompanyName(
 }
 
 const cleanName = (s: string) => {
-  const t = s.replace(/\s+/g, " ").trim();
+  const t = s.replace(/\s+/g, " ").trim()
+    .replace(/^(?:(?:ILLUSTRATIVE\s+SAMPLE|NOT\s+FOR\s+STATUTORY\s+USE|FOR\s+STATUTORY\s+USE|DEMO\s+ONLY|GL|FT)\s*)+/i, "");
   // title-case fully-uppercase headers ("SHIVALIC POWER CONTROL LIMITED")
   return /[a-z]/.test(t) ? t : titleCase(t);
 };
@@ -330,9 +353,23 @@ const cleanName = (s: string) => {
 // ── industry / litigation / exchange helpers ─────────────────────────────────
 
 function trimIndustry(s: string): string {
-  let t = s.replace(/\s+/g, " ").trim().replace(/[;:]$/, "");
+  let t = s.replace(/\s+/g, " ").trim().replace(/[;:]$/, "")
+    .replace(/^(?:of\s+)?the\s+company\s+is\s+(?:engaged\s+in\s+|the\s+)?/i, "")
+    .replace(/^the\s+/i, "");
+  t = t.replace(/^([a-z])/, (first) => first.toUpperCase());
   if (t.length > 140) t = t.slice(0, 137).replace(/[, ]+\w*$/, "") + "…";
   return t;
+}
+
+function parseRegisteredOffice(text: string): { city?: string; state?: string } | null {
+  const m = text.match(/registered\s+office[\s\S]{0,320}?\b\d{6}\b/i)
+    ?? text.match(/registered\s+office[^\n]{0,320}/i);
+  if (!m) return null;
+  const address = m[0].replace(/\s+/g, " ");
+  const pin = address.match(/,\s*([A-Za-z][A-Za-z .'-]+),\s*([A-Za-z][A-Za-z &.-]+?)\s+(\d{6})\b/);
+  if (pin) return { city: pin[1].trim(), state: pin[2].trim() };
+  const state = Object.values(STATE_CODES).find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(address));
+  return state ? { state } : null;
 }
 
 function exchangeSource(readable: ParseSource[]): string {

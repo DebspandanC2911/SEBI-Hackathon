@@ -75,7 +75,10 @@ export default function FactsTable({
   const [showManual, setShowManual] = useState(false);
   const [manual, setManual] = useState({ factKey: "", value: "", financialYear: "" });
   const [filter, setFilter] = useState("");
-  const [view, setView] = useState<EvidenceView>("review");
+  // Default to the Review queue only when something actually needs review; when
+  // extraction is clean (every fact auto-accepted at high confidence) start on
+  // All facts so the page never looks empty despite facts having been extracted.
+  const [view, setView] = useState<EvidenceView>(initialReviewSource ? "review" : "all");
   const [expandedSources, setExpandedSources] = useState<Set<string>>(
     () => new Set(initialReviewSource ? [initialReviewSource] : facts[0]?.sourceFileName ? [facts[0].sourceFileName] : []),
   );

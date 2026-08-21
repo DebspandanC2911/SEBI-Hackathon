@@ -182,10 +182,10 @@ export default function Sidebar({ role = "PROMOTER" }: { role?: "PROMOTER" | "ME
 
       {/* utilities */}
       <div className="border-t border-white/10 bg-black/10 px-3 py-2.5 space-y-0.5">
-        <button type="button" onClick={openLearn} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-sky-100/75 transition hover:bg-white/10 hover:text-white">
+        <button type="button" onClick={openLearn} className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-sky-100/75 transition hover:bg-white/10 hover:text-white">
           <HelpCircle size={14} className="text-sky-300" /> Learn about SIIM
         </button>
-        <button onClick={logout} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[12px] text-sky-100/75 hover:bg-red-500/15 hover:text-red-200 text-left">
+        <button onClick={logout} className="w-full cursor-pointer flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[12px] text-sky-100/75 hover:bg-red-500/15 hover:text-red-200 text-left">
           <LogOut size={14} className="text-red-300/80" /> Log out
         </button>
       </div>
