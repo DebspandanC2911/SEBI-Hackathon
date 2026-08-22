@@ -30,10 +30,18 @@ import { rptBand } from "@/lib/rules/scoring-config";
 import { prettyLabel } from "@/lib/utils/labels";
 import type { PeerBenchmark } from "@/lib/engine/peers";
 
+// Tabs shown in the IPO Intelligence bar. Disclosure Integrity, Objects of Issue
+// and Valuation & Peers are intentionally hidden from the UI (not demoed) — their
+// full implementations remain below and in the engine, just not surfaced here.
 const TABS = [
-  "Overview", "Disclosure Integrity", "SME Framework", "Gaps & Inconsistencies",
-  "RPT & Fund Use Risk", "Objects of Issue", "Valuation & Peers", "Exchange Observations",
+  "Overview", "SME Framework", "Gaps & Inconsistencies",
+  "RPT & Fund Use Risk", "Exchange Observations",
 ] as const;
+
+// The full set of tab names, including the three hidden-from-UI ones, so their
+// content blocks below still type-check and stay in the codebase (just not shown
+// in the bar and not navigable).
+type TabName = (typeof TABS)[number] | "Disclosure Integrity" | "Objects of Issue" | "Valuation & Peers";
 
 // Tone + label for a single Disclosure-Integrity signal.
 const sigTone: Record<string, { cls: string; label: string }> = {
@@ -91,7 +99,7 @@ export default function IntelligenceTabs({
   benchmark: PeerBenchmark | null;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
+  const [tab, setTab] = useState<TabName>("Overview");
   const [running, setRunning] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [ruleView, setRuleView] = useState<RuleView>("attention");
@@ -194,8 +202,7 @@ export default function IntelligenceTabs({
         <div className="flex flex-col gap-2 xl:flex-row xl:items-start">
         <div className="grid min-w-0 flex-1 grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-5">
           {TABS.map((t) => {
-            const count = t === "Disclosure Integrity" ? integrityFlags
-              : t === "SME Framework" ? obAttention
+            const count = t === "SME Framework" ? obAttention
                 : t === "Gaps & Inconsistencies" ? gaps.length + finIssues.length + openConflicts.length
                   : t === "Exchange Observations" ? observations.length
                     : 0;
@@ -254,9 +261,8 @@ export default function IntelligenceTabs({
           </section>
 
           <GlassPanel className="overflow-hidden">
-            <div className="grid divide-y divide-slate-100 md:grid-cols-3 md:divide-x md:divide-y-0">
+            <div className="grid divide-y divide-slate-100 md:grid-cols-2 md:divide-x md:divide-y-0">
               <SignalStrip icon={XCircle} label="Evidence conflicts" value={openConflicts.length} note="Values disagree across documents" tone={openConflicts.length ? "red" : "green"} onClick={() => setTab("Gaps & Inconsistencies")} />
-              <SignalStrip icon={Sparkles} label="Disclosure integrity" value={integrity ? `${integrity.score}/100` : "Pending"} note={integrity ? `${integrityFlags} signal${integrityFlags === 1 ? "" : "s"} to prepare for` : "Run analysis to calculate"} tone={integrity && integrity.score < 70 ? "amber" : "green"} onClick={() => setTab("Disclosure Integrity")} />
               <SignalStrip icon={FileSearch} label="Predicted observations" value={observations.length} note="Likely exchange reviewer queries" tone={observations.length ? "amber" : "green"} onClick={() => setTab("Exchange Observations")} />
             </div>
           </GlassPanel>

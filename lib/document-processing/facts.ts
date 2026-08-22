@@ -92,13 +92,53 @@ function findPage(pages: string[], needle: string): number | null {
   return null;
 }
 
+// Keyword hints per fact key, used to locate the page a NUMERIC fact came from
+// (a bare number like "14" is too common to search for on its own, so we anchor
+// on the page where the fact's label also appears).
+const PAGE_HINTS: Record<string, string[]> = {
+  revenueCr: ["revenue", "turnover", "total income", "sales"],
+  patCr: ["profit after tax", "net profit", "profit for the year", "pat"],
+  ebitdaCr: ["ebitda"],
+  netWorthCr: ["net worth", "networth", "equity", "shareholders"],
+  borrowingsCr: ["borrowing", "term loan", "total debt"],
+  receivablesCr: ["receivable", "debtor"],
+  cfoCr: ["cash flow from oper", "cash generated from oper", "operating activit"],
+  gstTurnoverCr: ["turnover", "taxable"],
+  demandNoticeCr: ["demand", "penalty", "show cause"],
+  quotationAmountCr: ["quotation", "proforma", "total amount", "grand total"],
+  wcRequirementCr: ["working capital"],
+  rptPurchasesCr: ["related party", "purchases from"],
+  promoterLoanCr: ["loan from", "unsecured loan"],
+  authorisedCapitalCr: ["authorised capital", "authorized capital"],
+};
+
+/**
+ * Page a fact was found on. For string values (CIN, GSTIN…) the value itself is
+ * distinctive enough to locate. For numeric financials we anchor on the page
+ * where the fact's LABEL keyword appears (optionally with the value), so
+ * financial facts get real provenance instead of "Page not mapped".
+ */
+function findFactPage(pages: string[], key: string, valueStr: string): number | null {
+  const hints = PAGE_HINTS[key];
+  if (hints) {
+    for (let i = 0; i < pages.length; i++) {
+      const low = pages[i].toLowerCase();
+      if (hints.some((h) => low.includes(h)) && pages[i].includes(valueStr)) return i + 1;
+    }
+    for (let i = 0; i < pages.length; i++) {
+      if (hints.some((h) => pages[i].toLowerCase().includes(h))) return i + 1;
+    }
+  }
+  return findPage(pages, valueStr);
+}
+
 export function factsFromFields(doc: DocumentRecord, pages: string[]): ExtractedFact[] {
   const now = new Date().toISOString();
   const out: ExtractedFact[] = [];
   for (const [key, value] of Object.entries(doc.fields)) {
     if (value === undefined || value === null || key === "rptEntityNames" || key === "quotationHasGstin" || key === "fy") continue;
     const valueStr = String(value);
-    const page = typeof value === "string" ? findPage(pages, valueStr) : null;
+    const page = findFactPage(pages, key, valueStr);
     out.push({
       id: uid("fact"),
       companyId: doc.companyId,
@@ -127,6 +167,28 @@ export function factsFromFields(doc: DocumentRecord, pages: string[]): Extracted
 // ── AI facts (chunk-wise, parallel) ─────────────────────────────────────────
 
 export const MAX_AI_CHUNKS_PER_DOC = 12;
+
+/**
+ * Audited-actual financial metrics. Their ONLY authoritative source is an
+ * audited/restated financial statement. The regex extractor already refuses to
+ * read these from non-financial documents; this mirrors that guard for the AI
+ * path, so a projection buried in another document (e.g. "Projected trade
+ * receivables 9.00" in a Working Capital Assessment) is never harvested as an
+ * actual and never raises a phantom conflict against the audited figure.
+ */
+const FINANCIAL_ACTUAL_KEYS = new Set([
+  "revenueCr", "patCr", "ebitdaCr", "netWorthCr", "borrowingsCr", "receivablesCr", "cfoCr",
+]);
+const AUDITED_FINANCIAL_CATEGORIES = new Set([
+  "Restated Financials", "Financial Statements", "Audit Report",
+]);
+
+/** Reject an AI fact if it claims an audited financial metric from a document
+ *  that is not an audited/restated financial statement. */
+function acceptAiFact(factKey: string, category: string): boolean {
+  if (FINANCIAL_ACTUAL_KEYS.has(factKey) && !AUDITED_FINANCIAL_CATEGORIES.has(category)) return false;
+  return true;
+}
 
 /** Map one raw AiFact from a chunk into a fully provenanced ExtractedFact. */
 function makeAiFact(doc: DocumentRecord, chunk: DocumentChunk, f: AiFact, now: string): ExtractedFact {
@@ -169,7 +231,9 @@ export async function aiFactsForChunkJobs(jobs: ChunkJob[]): Promise<ExtractedFa
     try {
       const aiFacts: AiFact[] = await extractFactsFromChunk(chunk, doc.fileName, doc.category);
       chunk.processingStatus = "processed";
-      return aiFacts.map((f) => makeAiFact(doc, chunk, f, now));
+      return aiFacts
+        .filter((f) => acceptAiFact(f.factKey, doc.category))
+        .map((f) => makeAiFact(doc, chunk, f, now));
     } catch {
       chunk.processingStatus = "failed";
       return [] as ExtractedFact[];

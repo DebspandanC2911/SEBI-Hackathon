@@ -249,6 +249,43 @@ export interface ExportLedgerEntry {
   timestamp: string;
 }
 
+/**
+ * Verifiable Disclosure Credential — a cryptographically signed, publicly
+ * verifiable attestation that seals one export of a company's disclosure pack.
+ * It binds the issuer, the readiness snapshot and the tamper-evident ledger
+ * seal (a chainHash) under an Ed25519 signature, so any outside party (a SEBI
+ * officer, an exchange reviewer, an investor) can confirm the pack is authentic
+ * and untampered WITHOUT trusting SIIM — the missing "signer identity" layer the
+ * hash-chain alone could not provide. Looked up by a public capability `token`.
+ */
+export interface DisclosureCredential {
+  id: string;
+  token: string;               // public capability token used in the verifier URL
+  companyId: string;
+  version: string;             // credential schema version, e.g. "1.0"
+  type: "VerifiableDisclosureCredential";
+  issuer: string;
+  subject: {
+    company: string;
+    cin: string | null;
+    artefact: string;          // what was sealed, e.g. "SME DRHP Filing Pack"
+    readinessScore: number | null;
+    disclosuresSealed: number; // count of source-linked facts in the pack
+    documentsIngested: number;
+    ledgerSeq: number;         // ledger sequence this credential seals
+    ledgerEntries: number;     // total ledger entries at issuance
+    ledgerSeal: string;        // chainHash at ledgerSeq (the sealed point)
+    contentHash: string;       // sha256 of the sealed pack content
+  };
+  issuedAt: string;
+  proof: {
+    type: "Ed25519Signature2020";
+    algorithm: "ed25519";
+    publicKeyHex: string;      // raw 32-byte Ed25519 public key (hex)
+    signature: string;         // base64url signature over the canonical message
+  };
+}
+
 export interface RptRisk {
   id: string;
   entityName: string;

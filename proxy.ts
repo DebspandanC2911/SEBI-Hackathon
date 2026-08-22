@@ -24,7 +24,10 @@ const PROMOTER_ONLY_API = ["/api/documents/upload", "/api/reset", "/api/objects"
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith("/api/auth")) return NextResponse.next();
+  // /api/auth/* (login/register) and /api/verify/* (public credential verifier)
+  // stay open so unauthenticated users can sign in and outsiders can verify a
+  // disclosure credential without a SIIM session.
+  if (pathname.startsWith("/api/auth") || pathname.startsWith("/api/verify")) return NextResponse.next();
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const user = token ? await verifySessionToken(token) : null;

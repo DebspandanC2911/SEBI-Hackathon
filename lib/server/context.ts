@@ -1,3 +1,4 @@
+import { cache } from "react";
 import {
   companyConflicts, companyDocuments, companyDraft, companyFacts, companyFlags,
   companyObjects, getActiveCompanyFor, loadDb, type Db,
@@ -52,8 +53,8 @@ export function composeCompanyContext(db: Db, company: Company | null): AppConte
  * and ALWAYS scoped to the logged-in user: a promoter sees only their own
  * companies, a banker only code-linked ones. No session → no company.
  */
-export async function getContext(): Promise<AppContext> {
+export const getContext = cache(async function getContext(): Promise<AppContext> {
   const db = await loadDb();
   const user = await getSessionUser();
   return composeCompanyContext(db, user ? getActiveCompanyFor(db, user) : null);
-}
+});

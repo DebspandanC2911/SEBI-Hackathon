@@ -11,6 +11,7 @@ import type {
   DocumentChunk,
   DocumentRecord,
   DraftSection,
+  DisclosureCredential,
   ExportLedgerEntry,
   ExtractedFact,
   FactConflict,
@@ -45,6 +46,7 @@ export interface Db {
   analysis: Record<string, AnalysisResult>;
   auditLog: AuditLogEntry[];
   exportLedger: ExportLedgerEntry[]; // tamper-evident export hash-chain
+  credentials: DisclosureCredential[]; // signed, publicly verifiable disclosure credentials
 }
 
 /**
@@ -71,6 +73,7 @@ const ARRAY_KEYS = [
   "objects",
   "auditLog",
   "exportLedger",
+  "credentials",
 ] as const;
 
 const emptyDb: Db = {
@@ -87,6 +90,7 @@ const emptyDb: Db = {
   analysis: {},
   auditLog: [],
   exportLedger: [],
+  credentials: [],
 };
 
 /** JSON snapshot of each top-level key at load time, used to diff on save. */
@@ -261,6 +265,7 @@ export function purgeCompanyIds(db: Db, ids: Set<string>): number {
   db.flags = db.flags.filter((f) => !ids.has(f.companyId));
   db.auditLog = db.auditLog.filter((a) => !ids.has(a.companyId));
   db.exportLedger = db.exportLedger.filter((e) => !ids.has(e.companyId));
+  db.credentials = db.credentials.filter((c) => !ids.has(c.companyId));
   for (const id of ids) {
     delete db.objectsByCompany[id];
     delete db.analysis[id];
@@ -365,4 +370,22 @@ export function appendExportLedger(
   db.exportLedger.push(e);
   if (db.exportLedger.length > 1000) db.exportLedger.splice(0, db.exportLedger.length - 1000);
   return e;
+}
+
+/** Find a signed disclosure credential by its public capability token. */
+export function credentialByToken(db: Db, token: string): DisclosureCredential | null {
+  return db.credentials.find((c) => c.token === token) ?? null;
+}
+
+/** A company's signed credentials, newest first. */
+export function companyCredentials(db: Db, companyId: string): DisclosureCredential[] {
+  return db.credentials
+    .filter((c) => c.companyId === companyId)
+    .sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+}
+
+/** Append a signed credential. Caller must saveDb(). */
+export function saveCredential(db: Db, credential: DisclosureCredential) {
+  db.credentials.push(credential);
+  if (db.credentials.length > 1000) db.credentials.splice(0, db.credentials.length - 1000);
 }
